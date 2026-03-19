@@ -1033,6 +1033,19 @@ def attribute_clauses(original_sentences, char_list, coref_map, output_chars=Non
                         and all_anchors_in_conj_branch):
                     continue
 
+                # Skip subordinate clause (advcl/ccomp/relcl) if this character
+                # already has a ROOT-level clause for this sentence — the ROOT
+                # clause already contains the subordinate clause text.
+                # Example: Emma has ROOT 'arrived... laughing as they set up their stall'
+                # → skip advcl 'as they set up their stall' (already included above)
+                if head.dep_ in ("advcl", "ccomp", "relcl", "conj"):
+                    already_has_root = any(
+                        e["idx"] == sent_idx and e["head_i"] == root_tok.i
+                        for e in attribution[char]
+                    ) if root_tok else False
+                    if already_has_root:
+                        continue
+
                 if head.i not in seen_heads:
                     seen_heads.add(head.i)
                     attribution[char].append({
