@@ -470,6 +470,9 @@ def resolve_references(text, char_pronoun_dict, pronoun_to_chars, singular_they_
                 if singular_they_nsubj:
                     break
 
+        # ── Print sentence first, then annotate pronouns below it ────────
+        print(f"  S{sent_idx}: {s_text}")
+
         # ── Annotate each token ───────────────────────────────────────────
         for token in sent:
             tok_lower = token.text.lower()
@@ -577,8 +580,6 @@ def resolve_references(text, char_pronoun_dict, pronoun_to_chars, singular_they_
                     coref_map[(sent_idx, rel_idx)] = spk
                     print(f"  S{sent_idx} '{token.text}' (rel {rel_idx}) "
                           f"→ {spk} [dialogue]")
-
-        print(f"  S{sent_idx}: {s_text}")
 
     print("-" * 50)
     return original_sents, coref_map
@@ -1009,14 +1010,7 @@ def attribute_clauses(original_sentences, char_list, coref_map, output_chars=Non
                     deduped.append(tok)
             char_tokens[char] = deduped
 
-        # DEBUG: dep tree for this sentence
-        print(f"  [DEP] S{sent_idx}: " + " | ".join(
-            f"{t.text}({t.dep_}←{t.head.text})" for t in doc
-        ))
-        # DEBUG: show anchors
-        for char in found_chars:
-            print(f"  [DEBUG] S{sent_idx} {char}: anchors = "
-                  f"{[(t.text, t.dep_, t.i) for t in char_tokens[char]]}")
+
 
         # ── Extract & deduplicate clauses ─────────────────────────────────
         for char in found_chars:
@@ -1098,6 +1092,14 @@ def attribute_clauses(original_sentences, char_list, coref_map, output_chars=Non
                         "head_i": root_tok.i,
                         "text":   merged_text,
                     })
+
+        # ── Print per-sentence results ────────────────────────────────────
+        print(f"\n  S{sent_idx}: {sent_text}")
+        for char in output_chars:
+            sent_entries = [e for e in attribution.get(char, []) if e["idx"] == sent_idx]
+            if sent_entries:
+                for e in sent_entries:
+                    print(f"    → {char}: \"{e['text']}\"")
 
     # ── Print summary (only student-provided characters) ──────────────────
     print("\n📊 FINAL ATTRIBUTION SUMMARY (By Entity):")
