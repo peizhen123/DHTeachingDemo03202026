@@ -510,22 +510,9 @@ def resolve_references(text, char_pronoun_dict, pronoun_to_chars, singular_they_
                                   f"→ {plural_target} [plural they]")
 
                 else:
-                    # Object-role (dobj/pobj/etc): use recency to decide
-                    # singular V vs plural group — only when singular they
-                    # characters exist in the story.
-                    if singular_they_chars and last_singular_they:
-                        singular_last = last_seen_sent.get(last_singular_they, -1)
-                        plural_last = max(
-                            (last_seen_sent.get(c, -1) for c in last_plural_group),
-                            default=-1
-                        )
-                        if singular_last >= plural_last:
-                            coref_map[(sent_idx, rel_idx)] = last_singular_they
-                            print(f"  S{sent_idx} '{token.text}' (rel {rel_idx}) "
-                                  f"→ {last_singular_they} [singular they, recency]")
-                            continue
-
-                    # No singular they chars, or plural group more recent → plural
+                    # Object-role them/their always resolves to plural group.
+                    # Example: 'V watched them' → them = Emma+Leo (plural)
+                    # Example: 'their stall was overturned' → their = Emma+Leo
                     if not base_plural_target:
                         print(f"  S{sent_idx} '{token.text}' (rel {rel_idx}) "
                               f"→ [skipped: no prior group]")
@@ -876,9 +863,6 @@ def _extract_clause_for_anchor(anchor_token, found_chars, char,
                 child_current = _chars_in_subtree_coref(
                     child, [char], coref_map, sent_idx
                 )
-                print(f"    [EXCL] child={child.text}({child.dep_}) "
-                      f"others={child_others} current={child_current} "
-                      f"prune={bool(child_others and not child_current)}")
                 if child_others and not child_current:
                     excluded.update(t.i for t in child.subtree)
 
