@@ -634,8 +634,12 @@ def _name_in_subtree(token, char_list):
     single_word = [c for c in char_list if len(c.split()) == 1]
     multi_word  = [c for c in char_list if len(c.split()) > 1]
 
-    # Single-word: direct match
+    # Single-word: direct match, skip possessive tokens (dep_='poss')
+    # so "V's hand" does not count as V being present in the subtree.
+    # Example: 'Emma squeezed V's hand' → V is poss, not an actor → skip
     for t in token.subtree:
+        if t.dep_ == "poss":
+            continue
         for char in single_word:
             if t.text.lower() == char.lower():
                 result.add(char)
@@ -968,12 +972,13 @@ def attribute_clauses(original_sentences, char_list, coref_map, output_chars=Non
 
         # Coref-map pronouns: add as anchors ONLY if they are in a subject role.
         # Object-role pronouns (dobj, iobj, pobj) mean the character is being
-        # acted upon, not acting — they should not generate clause attribution.
+        # acted upon — they should not generate clause attribution.
+        # Example: 'V joined them' → them(dobj) = Emma+Leo, but Emma/Leo
+        # should not get V's clause just because they appear as objects.
         SUBJECT_DEPS = {"nsubj", "nsubjpass", "csubj", "csubjpass", "expl"}
         for token in doc:
             resolved = coref_map.get((sent_idx, token.i))
             if resolved is not None:
-                # Only add if this token is in a subject role
                 if token.dep_ not in SUBJECT_DEPS:
                     continue
                 targets = resolved if isinstance(resolved, list) else [resolved]
