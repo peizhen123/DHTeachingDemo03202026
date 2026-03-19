@@ -1033,19 +1033,6 @@ def attribute_clauses(original_sentences, char_list, coref_map, output_chars=Non
                         and all_anchors_in_conj_branch):
                     continue
 
-                # Skip subordinate clause (advcl/ccomp/relcl) if this character
-                # already has a ROOT-level clause for this sentence — the ROOT
-                # clause already contains the subordinate clause text.
-                # Example: Emma has ROOT 'arrived... laughing as they set up their stall'
-                # → skip advcl 'as they set up their stall' (already included above)
-                if head.dep_ in ("advcl", "ccomp", "relcl", "conj"):
-                    already_has_root = any(
-                        e["idx"] == sent_idx and e["head_i"] == root_tok.i
-                        for e in attribution[char]
-                    ) if root_tok else False
-                    if already_has_root:
-                        continue
-
                 if head.i not in seen_heads:
                     seen_heads.add(head.i)
                     attribution[char].append({
@@ -1053,6 +1040,30 @@ def attribute_clauses(original_sentences, char_list, coref_map, output_chars=Non
                         "head_i": head.i,
                         "text":   clause_text,
                     })
+
+            # Post-process: if this character has a ROOT-level clause for this
+            # sentence, remove any subordinate (advcl/ccomp/relcl/conj) clauses
+            # that are already contained within it.
+            # Example: Emma has ROOT 'arrived... laughing as they set up their stall'
+            # AND advcl 'as they set up their stall' → remove the advcl entry.
+            if root_tok is not None:
+                has_root = any(
+                    e["idx"] == sent_idx and e["head_i"] == root_tok.i
+                    for e in attribution[char]
+                )
+                if has_root:
+                    attribution[char] = [
+                        e for e in attribution[char]
+                        if not (
+                            e["idx"] == sent_idx
+                            and e["head_i"] != root_tok.i
+                            and any(
+                                tok.i == e["head_i"]
+                                and tok.dep_ in ("advcl", "ccomp", "relcl", "conj")
+                                for tok in doc
+                            )
+                        )
+                    ]
 
         # ── Rule 4: ROOT uncovered — merge main clause into advcl chars ───
         if root_tok and not _root_is_covered(root_tok, attribution, sent_idx, char_list):
