@@ -408,9 +408,11 @@ def resolve_references(text, char_pronoun_dict, pronoun_to_chars, singular_they_
         sent_start = sent.start
 
         # ── Characters explicitly named in this sentence ──────────────────
+        # Use word-boundary regex to avoid single-letter names (e.g. "V")
+        # matching as substrings inside other words (e.g. "arrived", "festival").
         named_in_sent = [
             name for name in char_list
-            if name.lower() in s_text.lower()
+            if re.search(r'\b' + re.escape(name) + r'\b', s_text, re.IGNORECASE)
         ]
 
         # ── Update last_singular_they and last_seen_sent ──────────────────
