@@ -86,6 +86,8 @@ def collect_characters_from_input():
 
     pronoun_key is one of:
       'she/her', 'he/him', 'they/them', or a custom string like 'ze/hir'
+    this function is not used in our current code as students give their 
+    own characters.
     """
     print("\n" + "="*55)
     print("📖 CHARACTER SETUP")
@@ -118,11 +120,10 @@ def collect_characters_from_input():
 
 def extract_characters(doc, char_input=None):
     """
-    Builds character registries from student input + NER.
-
+    Builds character registries from student input + NER. 
     Student input is shown in output. NER-only characters are tracked
     internally to prevent their clauses from polluting student characters,
-    but never appear in the final summary.
+    but never appear in the final summary. 
 
     Example:
         char_input = {"Emma Smith": "she/her", "Leo Smith": "he/him"}
@@ -172,19 +173,19 @@ def extract_characters(doc, char_input=None):
             print(f"  [NER] Extra character detected (internal only): {name}")
 
     # ── Build pronoun → character lookup ─────────────────────────────────
-    pronoun_to_chars = {}
-    singular_they_chars = set()
+    pronoun_to_chars = {}      # maps each pronoun form (e.g. "she") → list of characters who use it
+    singular_they_chars = set()  # characters using singular they/them (to distinguish from plural)
 
     for name, pkey in char_pronoun_dict.items():
-        forms = PRONOUN_SETS.get(pkey, set())
+        forms = PRONOUN_SETS.get(pkey, set())  # look up all inflected forms for this pronoun key
         if not forms:
-            parts = pkey.split("/")
-            forms = set(parts)
+            forms = set(pkey.split("/"))  # fallback: split key directly (e.g. "he/him" → {"he", "him"})
         for form in forms:
-            pronoun_to_chars.setdefault(form, []).append(name)
+            pronoun_to_chars.setdefault(form, []).append(name)  # reverse-map: pronoun → character
         if pkey == "they/them":
-            singular_they_chars.add(name)
+            singular_they_chars.add(name)  # track singular-they characters separately
 
+    # Debug: print character registry to verify pronoun assignments before resolution
     print("\n=== [PHASE 1] Character Registry ===")
     for name in output_chars:
         pkey = char_pronoun_dict[name]
@@ -195,7 +196,7 @@ def extract_characters(doc, char_input=None):
 
 
 # =============================================================
-# PHASE 2 — COREFERENCE ANNOTATION  (no text replacement)
+# PHASE 2 — COREFERENCE ANNOTATION
 # =============================================================
 
 # ---------- helpers ----------
@@ -390,7 +391,7 @@ def resolve_references(text, char_pronoun_dict, pronoun_to_chars, singular_they_
     last_plural_group = []
     last_singular_they = None
     # Track which sentence each character was last explicitly named in.
-    # Used to decide whether singular-they 'them' (object) resolves to V
+    # Used to decide whether singular-they 'them' (object) resolves to V (they)
     # or to the plural group — whichever was named more recently wins.
     # Example: 'V is sad. Emma watches them leave.'
     #   last_seen_sent[V] = 0, last_seen_sent[Emma] = 1
@@ -510,9 +511,22 @@ def resolve_references(text, char_pronoun_dict, pronoun_to_chars, singular_they_
                                   f"→ {plural_target} [plural they]")
 
                 else:
-                    # Object-role them/their always resolves to plural group.
-                    # Example: 'V watched them' → them = Emma+Leo (plural)
-                    # Example: 'their stall was overturned' → their = Emma+Leo
+                    # Object-role them/their: use recency to decide singular V vs plural group,
+                    # but only when V is NOT the subject of this sentence
+                    # (V can't be the antecedent of its own object pronoun).
+                    if singular_they_chars and last_singular_they \
+                            and singular_they_nsubj != last_singular_they:
+                        singular_last = last_seen_sent.get(last_singular_they, -1)
+                        plural_last = max(
+                            (last_seen_sent.get(c, -1) for c in last_plural_group),
+                            default=-1
+                        )
+                        if singular_last >= plural_last:
+                            coref_map[(sent_idx, rel_idx)] = last_singular_they
+                            print(f"  S{sent_idx} '{token.text}' (rel {rel_idx}) "
+                                  f"→ {last_singular_they} [singular they, recency]")
+                            continue
+                    # Fallthrough: resolve to plural group
                     if not base_plural_target:
                         print(f"  S{sent_idx} '{token.text}' (rel {rel_idx}) "
                               f"→ [skipped: no prior group]")
